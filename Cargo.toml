@@ -7,7 +7,7 @@ keywords = ["typst", "cli"]
 edition = "2018"  # or "2018" for Rust 2018
 
 [lib]
-name = "typst-genpdf"
+name = "typst_genpdf"
 path = "src/lib.rs"
 test = false
 doctest = false
