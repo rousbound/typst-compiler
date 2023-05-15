@@ -1,5 +1,5 @@
 [package]
-name = "genpdf"
+name = "typst-genpdf"
 version = "0.1.0"
 description = "Library interface for typst."
 categories = ["compilers", "command-line-utilities"]
@@ -7,7 +7,7 @@ keywords = ["typst", "cli"]
 edition = "2018"  # or "2018" for Rust 2018
 
 [lib]
-name = "genpdf"
+name = "typst-genpdf"
 path = "src/lib.rs"
 test = false
 doctest = false
