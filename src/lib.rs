@@ -63,15 +63,11 @@ pub fn convert_json(value: serde_json::Value) -> Value {
 }
 
 impl SystemWorld {
-    fn new(root: PathBuf, font_paths: &[PathBuf], json: Option<serde_json::Value> ) -> Self {
+    fn new(root: PathBuf, font_paths: &[PathBuf]) -> Self {
         let mut searcher = FontSearcher::new();
         searcher.search(font_paths);
 
         let mut library = typst_library::build();
-
-        if let Some(json) = json {
-            library.global.scope_mut().define("dados", convert_json(json));
-        }
 
         Self {
             root,
@@ -83,6 +79,12 @@ impl SystemWorld {
             sources: FrozenVec::new(),
             main: SourceId::detached(),
         }
+    }
+
+    fn declare_global_value(&mut self, label: &str, value:Value) {
+        let mut library = typst_library::build();
+        library.global.scope_mut().define("dados", value);
+        self.library = Prehashed::new(library);
     }
 }
 
@@ -199,32 +201,47 @@ impl SystemWorld {
     }
 }
 
+pub struct Compiler {
+    world: SystemWorld,
+}
 
-pub fn genpdf(
-    input: PathBuf,
-    root: PathBuf,
-    json: Option<serde_json::Value>
-    ) -> StrResult<Vec<u8>> 
-{
+impl Compiler {
 
-    let mut world = SystemWorld::new(root, &vec![PathBuf::new()], json);
-    world.reset();
-    world.main = world.resolve(&input).map_err(|_| FileError::Other)?;
-    match typst::compile(&world) {
-        // Export the PDF.
-        Ok(document) => {
-            let buffer = typst::export::pdf(&document);
-            tracing::info!("Compilation succeeded");
-            Ok(buffer)
-        }
+    pub fn new(root: PathBuf) -> Compiler {
+        
+        let world = SystemWorld::new(root, &vec![PathBuf::new()]);
+        Compiler{world: world}
 
-        // Print diagnostics.
-        Err(errors) => {
-            tracing::info!("Compilation failed");
-            Err(EcoString::from("Compilation failed"))
-        }
     }
 
+    pub fn compile(
+        &mut self,
+        input: PathBuf,
+        json: Option<serde_json::Value>
+        ) -> StrResult<Vec<u8>> 
+    {
+
+        if let Some(json) = json {
+            self.world.declare_global_value("dados", convert_json(json));
+        };
+        self.world.reset();
+        self.world.main = self.world.resolve(&input).map_err(|_| FileError::Other)?;
+        match typst::compile(&self.world) {
+            // Export the PDF.
+            Ok(document) => {
+                let buffer = typst::export::pdf(&document);
+                tracing::info!("Compilation succeeded");
+                Ok(buffer)
+            }
+
+            // Print diagnostics.
+            Err(errors) => {
+                tracing::info!("Compilation failed");
+                Err(EcoString::from("Compilation failed"))
+            }
+        }
+
+    }
 }
 
 

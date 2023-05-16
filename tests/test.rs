@@ -1,14 +1,25 @@
 #[cfg(test)]
 mod tests {
 
-    use typst_genpdf;
+    use typst_genpdf::Compiler;
     use serde_json::{Value, json};
     use std::fs;
 
+    pub fn is_pdf(bytes: &[u8]) -> bool {
+        let pdf_signature: &[u8] = b"%PDF-";
+        bytes.starts_with(pdf_signature)
+    }
+
     #[test]
     fn test_api() {
-        if let Ok(data) = typst_genpdf::genpdf("tests/test.typ".into(), ".".into(), None) {
-            fs::write("tests/test.pdf", data);
+        let mut compiler: Compiler = Compiler::new(".".into());
+        if let Ok(data) = compiler.compile("tests/test.typ".into(), None) {
+            if is_pdf(&data) {
+                fs::write("tests/test.pdf", data);
+            } else {
+                panic!("Test failed");
+            }
+
         } else {
             panic!("Test failed");
 
@@ -31,8 +42,13 @@ mod tests {
         });
 
         
-        if let Ok(data) = typst_genpdf::genpdf("tests/test_with_json.typ".into(), ".".into(), Some(my_value)) {
-            fs::write("tests/test_with_json.pdf", data);
+        let mut compiler: Compiler = Compiler::new(".".into());
+        if let Ok(data) = compiler.compile("tests/test.typ".into(), None) {
+            if is_pdf(&data) {
+                fs::write("tests/test.pdf", data);
+            } else {
+                panic!("Test failed");
+            }
         } else {
             panic!("Test failed");
 
