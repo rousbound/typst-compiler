@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tests {
 
-    use genpdf;
+    use typst_genpdf;
     use serde_json::{Value, json};
     use std::fs;
 
     #[test]
     fn test_api() {
-        if let Ok(data) = genpdf::genpdf("tests/test.typ".into(), ".".into(), None) {
+        if let Ok(data) = typst_genpdf::genpdf("tests/test.typ".into(), ".".into(), None) {
             fs::write("tests/test.pdf", data);
         } else {
             panic!("Test failed");
@@ -31,7 +31,7 @@ mod tests {
         });
 
         
-        if let Ok(data) = genpdf::genpdf("tests/test_with_json.typ".into(), ".".into(), Some(my_value)) {
+        if let Ok(data) = typst_genpdf::genpdf("tests/test_with_json.typ".into(), ".".into(), Some(my_value)) {
             fs::write("tests/test_with_json.pdf", data);
         } else {
             panic!("Test failed");

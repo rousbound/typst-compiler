@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::error;
 
-
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::term::{self, termcolor};
 use comemo::Prehashed;
@@ -30,208 +29,6 @@ use typst_library::prelude::EcoString;
 
 use serde_json::{json};
 
-#[derive(Debug, Clone)]
-pub struct CliArguments {
-    /// Add additional directories to search for fonts
-    pub font_paths: Vec<PathBuf>,
-
-    /// Configure the root for absolute paths
-    pub root: Option<PathBuf>,
-
-    /// The typst command to run
-    pub command: Command,
-
-    /// Sets the level of verbosity: 0 = none, 1 = warning & error, 2 = info, 3 = debug, 4 = trace
-    pub verbosity: u8,
-}
-
-#[derive(Debug, Clone)]
-pub struct CompileCommand {
-    /// Path to input Typst file
-    pub input: PathBuf,
-
-    /// Path to output PDF file
-    pub output: Option<PathBuf>,
-
-    /// Opens the output file after compilation using the default PDF viewer
-    pub open: Option<Option<String>>,
-
-    /// Produces a flamegraph of the compilation process and saves it to the
-    /// given file or to `flamegraph.svg` in the current working directory.
-    //#[arg(long = "flamegraph", value_name = "OUTPUT_SVG")]
-    pub flamegraph: Option<Option<PathBuf>>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Command {
-    /// Compiles the input file into a PDF file
-    Compile(CompileCommand),
-
-    /// Watches the input file and recompiles on changes
-    Watch(CompileCommand),
-
-    /// List all discovered fonts in system and custom font paths
-    Fonts(FontsCommand),
-}
-#[derive(Debug, Clone)]
-pub struct FontsCommand {
-    /// Also list style variants of each font family
-    pub variants: bool,
-}
-
-type CodespanResult<T> = Result<T, CodespanError>;
-type CodespanError = codespan_reporting::files::Error;
-
-//pub fn typst_version() -> &'static str {
-    //env!("TYPST_VERSION")
-//}
-
-/// A summary of the input arguments relevant to compilation.
-struct CompileSettings {
-    /// The path to the input file.
-    input: PathBuf,
-
-    /// The path to the output file.
-    output: PathBuf,
-
-    /// Whether to watch the input files for changes.
-    watch: bool,
-
-    /// The root directory for absolute paths.
-    root: Option<PathBuf>,
-
-    /// The paths to search for fonts.
-    font_paths: Vec<PathBuf>,
-
-    /// The open command to use.
-    open: Option<Option<String>>,
-}
-
-impl CompileSettings {
-    /// Create a new compile settings from the field values.
-    pub fn new(
-        input: PathBuf,
-        output: Option<PathBuf>,
-        watch: bool,
-        root: Option<PathBuf>,
-        font_paths: Vec<PathBuf>,
-        open: Option<Option<String>>,
-    ) -> Self {
-        let output = match output {
-            Some(path) => path,
-            None => input.with_extension("pdf"),
-        };
-        Self { input, output, watch, root, font_paths, open }
-    }
-
-    /// Create a new compile settings from the CLI arguments and a compile command.
-    ///
-    /// # Panics
-    /// Panics if the command is not a compile or watch command.
-    pub fn with_arguments(args: CliArguments) -> Self {
-        let watch = matches!(args.command, Command::Watch(_));
-        let CompileCommand { input, output, open, .. } = match args.command {
-            Command::Compile(command) => command,
-            Command::Watch(command) => command,
-            _ => unreachable!(),
-        };
-        Self::new(input, output, watch, args.root, args.font_paths, open)
-    }
-}
-
-struct FontsSettings {
-    /// The font paths
-    font_paths: Vec<PathBuf>,
-
-    /// Whether to include font variants
-    variants: bool,
-}
-
-impl FontsSettings {
-    /// Create font settings from the field values.
-    pub fn new(font_paths: Vec<PathBuf>, variants: bool) -> Self {
-        Self { font_paths, variants }
-    }
-
-    /// Create a new font settings from the CLI arguments.
-    ///
-    /// # Panics
-    /// Panics if the command is not a fonts command.
-    pub fn with_arguments(args: CliArguments) -> Self {
-        match args.command {
-            Command::Fonts(command) => Self::new(args.font_paths, command.variants),
-            _ => unreachable!(),
-        }
-    }
-}
-
-pub fn genpdf(
-    input: PathBuf,
-    root: PathBuf,
-    json: Option<serde_json::Value>
-    ) -> Result<Vec<u8>, Box<dyn std::error::Error>>
-{
-
-    let command = CompileSettings::new(input, None, false, Some(root.clone()), vec![PathBuf::new()], None);
-    let mut world = SystemWorld::new(root, &command.font_paths, json);
-    match compile_once(&mut world, &command) {
-
-        Ok(data) => Ok(data),
-        Err(e) => Err(Box::new(e)),
-
-    }
-
-}
-
-
-
-
-/// Compile a single time.
-#[tracing::instrument(skip_all)]
-fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> FileResult<Vec<u8>> {
-    tracing::info!("Starting compilation");
-
-
-    world.reset();
-    world.main = world.resolve(&command.input).map_err(|_| FileError::Other)?;
-
-        ;
-
-    match typst::compile(world) {
-        // Export the PDF.
-        Ok(document) => {
-            let buffer = typst::export::pdf(&document);
-            tracing::info!("Compilation succeeded");
-            Ok(buffer)
-        }
-
-        // Print diagnostics.
-        Err(errors) => {
-            tracing::info!("Compilation failed");
-            Err(FileError::Other)
-        }
-    }
-}
-
-
-/// Execute a font listing command.
-fn fonts(command: FontsSettings) -> StrResult<()> {
-    let mut searcher = FontSearcher::new();
-    searcher.search(&command.font_paths);
-
-    for (name, infos) in searcher.book.families() {
-        println!("{name}");
-        if command.variants {
-            for info in infos {
-                let FontVariant { style, weight, stretch } = info.variant;
-                println!("- Style: {style:?}, Weight: {weight:?}, Stretch: {stretch:?}");
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// A world that provides access to the operating system.
 struct SystemWorld {
     root: PathBuf,
@@ -243,21 +40,6 @@ struct SystemWorld {
     sources: FrozenVec<Box<Source>>,
     main: SourceId,
 }
-
-/// Holds details about the location of a font and lazily the font itself.
-struct FontSlot {
-    path: PathBuf,
-    index: u32,
-    font: OnceCell<Option<Font>>,
-}
-
-/// Holds canonical data for all paths pointing to the same entity.
-#[derive(Default)]
-struct PathSlot {
-    source: OnceCell<FileResult<SourceId>>,
-    buffer: OnceCell<FileResult<Buffer>>,
-}
-
 
 /// Convert a JSON value to a Typst value.
 pub fn convert_json(value: serde_json::Value) -> Value {
@@ -416,6 +198,97 @@ impl SystemWorld {
         self.paths.borrow_mut().clear();
     }
 }
+
+
+pub fn genpdf(
+    input: PathBuf,
+    root: PathBuf,
+    json: Option<serde_json::Value>
+    ) -> StrResult<Vec<u8>> 
+{
+
+    let mut world = SystemWorld::new(root, &vec![PathBuf::new()], json);
+    world.reset();
+    world.main = world.resolve(&input).map_err(|_| FileError::Other)?;
+    match typst::compile(&world) {
+        // Export the PDF.
+        Ok(document) => {
+            let buffer = typst::export::pdf(&document);
+            tracing::info!("Compilation succeeded");
+            Ok(buffer)
+        }
+
+        // Print diagnostics.
+        Err(errors) => {
+            tracing::info!("Compilation failed");
+            Err(EcoString::from("Compilation failed"))
+        }
+    }
+
+}
+
+
+
+#[derive(Debug, Clone)]
+pub struct FontsCommand {
+    /// Also list style variants of each font family
+    pub variants: bool,
+}
+
+type CodespanResult<T> = Result<T, CodespanError>;
+type CodespanError = codespan_reporting::files::Error;
+
+
+struct FontsSettings {
+    /// The font paths
+    font_paths: Vec<PathBuf>,
+
+    /// Whether to include font variants
+    variants: bool,
+}
+
+impl FontsSettings {
+    /// Create font settings from the field values.
+    pub fn new(font_paths: Vec<PathBuf>, variants: bool) -> Self {
+        Self { font_paths, variants }
+    }
+}
+
+
+/// Execute a font listing command.
+fn fonts(command: FontsSettings) -> StrResult<()> {
+    let mut searcher = FontSearcher::new();
+    searcher.search(&command.font_paths);
+
+    for (name, infos) in searcher.book.families() {
+        println!("{name}");
+        if command.variants {
+            for info in infos {
+                let FontVariant { style, weight, stretch } = info.variant;
+                println!("- Style: {style:?}, Weight: {weight:?}, Stretch: {stretch:?}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+
+/// Holds details about the location of a font and lazily the font itself.
+struct FontSlot {
+    path: PathBuf,
+    index: u32,
+    font: OnceCell<Option<Font>>,
+}
+
+/// Holds canonical data for all paths pointing to the same entity.
+#[derive(Default)]
+struct PathSlot {
+    source: OnceCell<FileResult<SourceId>>,
+    buffer: OnceCell<FileResult<Buffer>>,
+}
+
+
 
 /// A hash that is the same for all paths pointing to the same entity.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
