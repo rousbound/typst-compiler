@@ -24,6 +24,7 @@ use typst::syntax::{Source, SourceId};
 use typst::util::{Buffer, PathExt};
 use typst::World;
 use walkdir::WalkDir;
+use tempfile;
 
 use typst_library::prelude::EcoString;
 
@@ -83,7 +84,7 @@ impl SystemWorld {
 
     fn declare_global_value(&mut self, label: &str, value:Value) {
         let mut library = typst_library::build();
-        library.global.scope_mut().define("_JSON", value);
+        library.global.scope_mut().define(label, value);
         self.library = Prehashed::new(library);
     }
 }
@@ -201,6 +202,44 @@ impl SystemWorld {
     }
 }
 
+/// Print diagnostic messages to the terminal.
+fn get_diagnostics(
+    world: &SystemWorld,
+    errors: Vec<SourceError>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut buffer = termcolor::Buffer::no_color();
+
+    let config = term::Config { tab_width: 2, ..Default::default() };
+
+    for error in errors {
+        let range = error.range(world);
+        let diag = Diagnostic::error()
+            .with_message(error.message)
+            .with_labels(vec![Label::primary(error.span.source(), range)]);
+
+        // Write to buffer
+        term::emit(&mut buffer, &config, world, &diag)?;
+
+        for point in error.trace {
+            let message = point.v.to_string();
+            let help = Diagnostic::help().with_message(message).with_labels(vec![
+                Label::primary(
+                    point.span.source(),
+                    world.source(point.span.source()).range(point.span),
+                ),
+            ]);
+
+            // Write to buffer
+            term::emit(&mut buffer, &config, world, &help)?;
+        }
+    }
+
+    // Convert the buffer into a String
+    let output = String::from_utf8(buffer.into_inner())?;
+
+    Ok(output)
+}
+
 pub struct Compiler {
     world: SystemWorld,
 }
@@ -222,7 +261,7 @@ impl Compiler {
     {
 
         if let Some(json) = json {
-            self.world.declare_global_value("dados", convert_json(json));
+            self.world.declare_global_value("_JSON", convert_json(json));
         };
         self.world.reset();
         self.world.main = self.world.resolve(&input).map_err(|_| FileError::Other)?;
@@ -237,7 +276,20 @@ impl Compiler {
             // Print diagnostics.
             Err(errors) => {
                 tracing::info!("Compilation failed");
-                Err(EcoString::from("Compilation failed"))
+                let diagnostic = get_diagnostics(&self.world, *errors).unwrap();
+                let temp_dir = tempfile::TempDir::new().unwrap();
+                
+                
+                // Get the path of the temporary directory
+                let tmp_path = temp_dir.into_path();
+                let log_file = format!("{}.log", tmp_path.join(input.file_stem().unwrap()).display());
+                let _ = fs::write(tmp_path.join(&log_file), &diagnostic);
+
+                for source in self.world.sources.iter() {
+                   let _ = fs::write(tmp_path.join(&source.path().file_name().unwrap()), &source.text()); 
+                }
+                tracing::info!("Compilation failed");
+                Err(EcoString::from(format!("Error compiling! Log written at: {}", log_file)))
             }
         }
 

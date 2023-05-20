@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use typst_genpdf::Compiler;
+    use typst_compiler::Compiler;
     use serde_json::{Value, json};
     use std::fs;
 
@@ -13,16 +13,17 @@ mod tests {
     #[test]
     fn test_api() {
         let mut compiler: Compiler = Compiler::new(".".into());
-        if let Ok(data) = compiler.compile("tests/test.typ".into(), None) {
-            if is_pdf(&data) {
-                fs::write("tests/test.pdf", data);
-            } else {
-                panic!("Test failed");
+        match compiler.compile("tests/test.typ".into(), None) {
+            Ok(data) => {
+                if is_pdf(&data) {
+                    fs::write("tests/test.pdf", data).unwrap();
+                } else {
+                    panic!("Test failed: Output is not a PDF");
+                }
+            },
+            Err(e) => {
+                panic!("Test failed: Compiler error: {}", e);
             }
-
-        } else {
-            panic!("Test failed");
-
         }
     }
 
@@ -41,18 +42,18 @@ mod tests {
             }
         });
 
-        
         let mut compiler: Compiler = Compiler::new(".".into());
-        if let Ok(data) = compiler.compile("tests/test.typ".into(), None) {
-            if is_pdf(&data) {
-                fs::write("tests/test.pdf", data);
-            } else {
-                panic!("Test failed");
+        match compiler.compile("tests/test.typ".into(), None) {
+            Ok(data) => {
+                if is_pdf(&data) {
+                    fs::write("tests/test.pdf", data).unwrap();
+                } else {
+                    panic!("Test failed: Output is not a PDF");
+                }
+            },
+            Err(e) => {
+                panic!("Test failed: Compiler error: {}", e);
             }
-        } else {
-            panic!("Test failed");
-
         }
     }
-
 }
