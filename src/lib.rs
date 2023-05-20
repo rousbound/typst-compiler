@@ -83,7 +83,7 @@ impl SystemWorld {
 
     fn declare_global_value(&mut self, label: &str, value:Value) {
         let mut library = typst_library::build();
-        library.global.scope_mut().define("dados", value);
+        library.global.scope_mut().define("_JSON", value);
         self.library = Prehashed::new(library);
     }
 }
