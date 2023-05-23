@@ -15,12 +15,13 @@ bench = false
 doc = false
 
 [dependencies]
-typst = { git = "https://github.com/typst/typst" }
+typst = { git = "https://github.com/typst/typst", package = "typst" }
 typst-library = { git = "https://github.com/typst/typst", package = "typst-library" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 codespan-reporting = "0.11"
 serde_json = { version = "1.0.96" }
-comemo = { git = "https://github.com/typst/comemo" }
+#comemo = { git = "https://github.com/typst/comemo" }
+comemo = "0.3"
 dirs = "5"
 elsa = "1.8"
 inferno = "0.11.15"
@@ -38,7 +39,8 @@ tracing-subscriber = "0.3.17"
 walkdir = "2"
 
 [build-dependencies]
-comemo = { git = "https://github.com/typst/comemo" }
+#comemo = { git = "https://github.com/typst/comemo" }
+comemo = "0.3"
 
 [features]
 default = ["embed-fonts"]

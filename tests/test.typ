@@ -1,2 +1,2 @@
-#seat text(font:"New Computer Modern")
+#set text(font:"New Computer Modern")
 Hello World!

@@ -264,7 +264,7 @@ impl Compiler {
             self.world.declare_global_value("_JSON", convert_json(json));
         };
         self.world.reset();
-        self.world.main = self.world.resolve(&input).map_err(|_| FileError::Other)?;
+        self.world.main = self.world.resolve(&self.world.root.join(&input)).map_err(|e| e )?;
         match typst::compile(&self.world) {
             // Export the PDF.
             Ok(document) => {
